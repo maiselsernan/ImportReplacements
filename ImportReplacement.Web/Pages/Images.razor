@@ -1,0 +1,26 @@
+﻿@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+
+<div class="d-inline-block">
+    <h4>Old Image</h4>
+    <img src="@OldImage" style="height: 400px; width: 350px;" />
+</div>
+<div class="d-inline-block">
+    <h4>New Image</h4>
+    <img src="@NewImage" style="height: 400px; width: 350px;" />
+</div>
+
+@code {
+    [Parameter]
+    public string OldImage { get; set; }
+    [Parameter]
+    public string NewImage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        OldImage = Configuration["BaseImageUrl"] + OldImage;
+        NewImage = Configuration["BaseImageUrl"] + NewImage;
+    }
+
+
+}

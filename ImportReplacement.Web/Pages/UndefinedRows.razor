@@ -1,0 +1,426 @@
+﻿@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+@page "/UndefinedRows"
+@page "/UndefinedRows/{type}"
+
+@using BlazorTable
+@using ImportReplacement.Models
+@using System.Linq
+@using ImportReplacement.Web.Services.Interfaces
+@using System.ComponentModel
+@inject RoutingHelper RoutingHelper
+@inject NavigationManager NavigationManager
+@inject IToastService ToastService
+@inject IReplacementService ReplacementService
+@inject ISiteService SiteService
+@implements IDisposable
+
+<h3>@ToSentence(Type)</h3>
+@if (_displayData == null)
+{
+    <div class="spinner"></div>
+}
+else
+{
+
+    <SiteSelector @ref="_siteSelector" Sites="@_sites" />
+    <Blazorise.Button Clicked="@CreateNewConsumersAsync" Color="Color.Info" Loading="@IsLoadingNewConsumer"> Create New Consumers</Blazorise.Button>
+    <Blazorise.Button Clicked="@MoveToSite" Color="Color.Primary" Loading="@IsLoadingToSite"> Move Selected Rows To Site</Blazorise.Button>
+    <Blazorise.Button Clicked="@FilterBySite" Color="Color.Secondary">Filter By Site</Blazorise.Button>
+    <Blazorise.Button Clicked="@ClearFilter" Color="Color.Light">Clear Filter</Blazorise.Button>
+    <BlazorTable.Table TableItem="UndefinedRow" Items="_displayData" PageSize="15" @ref="_table" SelectionType="SelectionType.Multiple">
+
+
+        <BlazorTable.Column Title="To Site" TableItem="UndefinedRow" Sortable="true" Field="@(x => x.file)" Filterable="true" Width="10%">
+            <Template>
+                <input type="checkbox" class="form-control form-control-sm" checked="@(_table.SelectedItems.Contains(context))" />
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="file" Field="@(x => x.file)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.file
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Meter Id" Field="@(x => x.meter_id)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.meter_id
+            </Template>
+        </BlazorTable.Column>
+
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Address" Field="@(x => x.address)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.address
+            </Template>
+        </BlazorTable.Column>
+
+        <BlazorTable.Column TableItem="UndefinedRow" Title="User" Field="@(x => x.user)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.user
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Date" Field="@(x => x.datetime)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.datetime
+            </Template>
+        </BlazorTable.Column>
+
+
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Old Number" Field="@(x => x.old_number)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.old_number
+            </Template>
+            <EditTemplate>
+                <input type="text" @bind-value="@context.old_number" class="form-control form-control-sm" />
+            </EditTemplate>
+
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="New Number" Field="@(x => x.new_number)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.new_number
+            </Template>
+            <EditTemplate>
+                <input type="text" @bind-value="@context.new_number" class="form-control form-control-sm" />
+            </EditTemplate>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Comment" Field="@(x => x.comment)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.comment
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Code Description" Field="@(x => x.code_description)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.code_description
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="UndefinedRow" Title="Diameter" Field="@(x => x.diameter)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.diameter
+            </Template>
+        </BlazorTable.Column>
+
+        <BlazorTable.Column Title="Site" TableItem="UndefinedRow" Sortable="true" Field="@(x => x.site_id)" Filterable="true" Width="10%" Class="@ColumnCss">
+            <Template>
+                @GetSiteName(context.site_id)
+            </Template>
+        </BlazorTable.Column>
+
+
+        <BlazorTable.Column Title="Existing Consumers" TableItem="UndefinedRow" Sortable="true" Field="@(x => x.ExistingConsumers)"
+                            Filterable="true" Width="10%"
+                            Class="text-center">
+            <Template>
+                @if (string.IsNullOrEmpty(context.ExistingConsumers) || context.ExistingConsumers != "[]")
+                {
+                    <i class="fas fa-user-check text-success"></i>
+                }
+            </Template>
+        </BlazorTable.Column>
+
+
+
+        <DetailTemplate TableItem="UndefinedRow">
+            <Images OldImage="@context.old_image" NewImage="@context.new_image"></Images>
+            <Map Longitude="@context.longitude" Latitude="@context.latitude"></Map>
+            @if (context.site_id != null && context.site_id > 0)
+            {
+                <BillingComponent RowToApprove="@GetDetailsProvider(context)"></BillingComponent>
+            }
+            else
+            {
+                <div class="d-inline-block align-content-center">
+                    <img src="Images/ForBilling.jpg" style="height: 400px; width: 350px;" />
+                </div>
+            }
+
+            <hr />
+
+            <div class="d-inline-block">
+                <Blazorise.Button Clicked="@(() => IgnoreMeterAsync(context.command_id))" Color="Color.Secondary">Ignore Meter</Blazorise.Button>
+
+                <Blazorise.Button Clicked="@(() => PerformedManually(context.command_id))" Color="Color.Warning">Performed Manually</Blazorise.Button>
+            </div>
+            <hr />
+            <div class="d-block">
+                <SearchConsumer Sites="@_sites" SiteID="@context.site_id" CommandId="@context.command_id"
+                                OnConsumerSelected="@(command => { var index = _displayData.FindIndex(item => item.command_id == command); if (index != -1) _displayData.RemoveAt(index); })"
+                                ExistingConsumers="@context.ExistingConsumers"></SearchConsumer>
+            </div>
+
+        </DetailTemplate>
+        <EmptyDataTemplate>
+            <div class="text-center">
+                No rows found!
+            </div>
+        </EmptyDataTemplate>
+        <Pager ShowPageNumber="true" ShowTotalCount="true" ShowPageSizes="true" />
+    </BlazorTable.Table>
+    <Blazorise.Button Clicked="@ToggleEdit" Color="Color.Danger"> @_editMode</Blazorise.Button>
+
+    <Confirm @ref="PerformManually" ConfirmationChanged="ConfirmManually_Click" ConfirmationTitle="Performed Manually" ConfirmationMessage="Are you sure you want to perform manually?"></Confirm>
+    <Confirm @ref="ConfirmIgnore" ConfirmationChanged="ConfirmIgnore_Click" ConfirmationTitle="Ignore Meter" ConfirmationMessage="Are you sure you want to ignore this meter?"></Confirm>
+
+
+}
+@code {
+    [Parameter]
+    public string Type { get; set; }
+    private RequestTypes _requestType;
+    private string _editMode = "Edit Rows";
+
+    private SiteSelector _siteSelector;
+    private ITable<UndefinedRow> _table;
+    private List<UndefinedRow> _displayData;
+    private List<UndefinedRow> _data;
+    private long _commandId;
+    private IEnumerable<Site> _sites = new List<Site>();
+    public bool IsLoadingToSite;
+    public bool IsLoadingNewConsumer;
+    private bool _showSitesColumns = true;
+    string ColumnCss => _showSitesColumns ? null : "d-none";
+    protected Confirm PerformManually { get; set; }
+    protected Confirm ConfirmIgnore { get; set; }
+    List<ConsumerNumbers> _consumerNumbers = new List<ConsumerNumbers>();
+
+
+    IDetailsProvider GetDetailsProvider(UndefinedRow row)
+    {
+        var detailsProvider = new DetailsProvider
+        {
+            Billable = row.Billable,
+            CommandId = row.command_id,
+            DisplayBillable = row.Billable != null && row.Billable.Value,
+            NewImage = row.new_image,
+            OldImage = row.old_image,
+            latitude = row.latitude,
+            longitude = row.longitude,
+            SiteId = row.site_id,
+            ReasonId = row.ReasonId,
+            ChargeDescription = row.ChargeDescription
+        };
+        detailsProvider.PropertyChanged += ItemOnPropertyChanged;
+
+        return detailsProvider;
+    }
+    private void ItemOnPropertyChanged(object sender, PropertyChangedEventArgs e)
+    {
+
+        switch (e.PropertyName)
+        {
+            case nameof(DetailsProvider.Billable):
+            case nameof(DetailsProvider.ReasonId):
+            case nameof(DetailsProvider.ChargeDescription):
+                break;
+            default:
+                return;
+        }
+        ReplacementService.ChangeRowAsync(sender as IDetailsProvider);
+    }
+    protected override Task OnParametersSetAsync()
+    {
+        NavigationManager.LocationChanged += LocationChanged;
+
+        return LoadDataAsync();
+    }
+    private async Task LoadDataAsync()
+    {
+        Enum.TryParse(Type, out _requestType);
+
+        var data = _displayData = _data = (await ReplacementService.GetUndefinedRowsAsync(_requestType)).ToList();
+
+        foreach (var item in data)
+        {
+            _consumerNumbers.Add(new ConsumerNumbers
+            {
+                CommandId = item.command_id,
+                OldNumber = item.old_number,
+                NewNumber = item.new_number
+            });
+        }
+
+        if (!data.Any())
+        {
+            ToastService.ShowInfo("No data to display", "No Data");
+        }
+        _sites = (await SiteService.GetSitesAsync()).ToList();
+    }
+    void LocationChanged(object sender, LocationChangedEventArgs e)
+    {
+        RoutingHelper.SourcePage = $"/UndefinedRows/{Type}";
+    }
+    void IDisposable.Dispose()
+    {
+        NavigationManager.LocationChanged -= LocationChanged;
+    }
+    private void PerformedManually(long commandId)
+    {
+        _commandId = commandId;
+        PerformManually.Show();
+    }
+    protected async Task ConfirmManually_Click(bool manuallyConfirmed)
+    {
+        if (manuallyConfirmed)
+        {
+            var index = _displayData.FindIndex(item => item.command_id == _commandId);
+            await ReplacementService.PerformedManuallyAsync(_commandId);
+            if (index != -1) _displayData.RemoveAt(index);
+        }
+    }
+    protected async Task ConfirmIgnore_Click(bool manuallyConfirmed)
+    {
+        if (manuallyConfirmed)
+        {
+            var index = _data.FindIndex(item => item.command_id == _commandId);
+            await ReplacementService.IgnoreMeterAsync(_commandId);
+            if (index != -1) _data.RemoveAt(index);
+        }
+    }
+
+    private void IgnoreMeterAsync(long commandId)
+    {
+        _commandId = commandId;
+        ConfirmIgnore.Show();
+    }
+
+    private async Task MoveToSite()
+    {
+        IsLoadingToSite = true;
+        var commands = _table.SelectedItems;
+        var siteId = _siteSelector.CurrentSite;
+        if (!commands.Any() || siteId == 0)
+        {
+            IsLoadingToSite = false;
+            ToastService.ShowError("Please select site and rows.");
+            return;
+        }
+
+        await ReplacementService.MoveRowsToSiteAsync(commands.Select(x => x.command_id), siteId);
+        foreach (var command in commands)
+        {
+            command.site_id = siteId;
+        }
+        _table.SelectedItems.Clear();
+        IsLoadingToSite = false;
+        _table.Refresh();
+    }
+
+    private string GetSiteName(int? siteID)
+    {
+        var site = _sites.FirstOrDefault(x => x.ID == siteID);
+        return site != null ? site.SiteName : string.Empty;
+    }
+
+    private void FilterBySite()
+    {
+        var siteId = _siteSelector.CurrentSite;
+        if (siteId <= 0)
+        {
+            _showSitesColumns = true;
+        }
+        else
+        {
+            _showSitesColumns = false;
+            _data = _displayData;
+            _displayData = _displayData.Where(x => x.site_id == siteId).ToList();
+        }
+        _table.Refresh();
+    }
+
+    private void ClearFilter()
+    {
+        _showSitesColumns = true;
+        _displayData = _data;
+        _siteSelector.CurrentSite = 0;
+        _table.Refresh();
+
+    }
+    protected async Task CreateNewConsumersAsync()
+    {
+        IsLoadingNewConsumer = true;
+        var commands = _table.SelectedItems;
+        var siteId = _siteSelector.CurrentSite;
+        if (!commands.Any() || siteId == 0)
+        {
+            IsLoadingNewConsumer = false;
+            ToastService.ShowError("Please select site and rows.");
+            return;
+        }
+        var commandIds = commands.Select(x => x.command_id).ToList();
+        var result = await ReplacementService.CreateNewConsumersAsync(commandIds, siteId);
+        if (result.IsSuccessStatusCode)
+        {
+            foreach (var commandId in commandIds)
+            {
+                var index = _displayData.FindIndex(item => item.command_id == commandId);
+                if (index != -1) _displayData.RemoveAt(index);
+            }
+            _table.SelectedItems.Clear();
+            _table.Refresh();
+            ToastService.ShowSuccess($"{commandIds.Count} row were updated.");
+        }
+        else
+        {
+            ToastService.ShowError("An error has occurred.");
+        }
+        IsLoadingNewConsumer = false;
+    }
+
+    private string ToSentence(string Input)
+    {
+        return new(Input.SelectMany((c, i) => i > 0 && char.IsUpper(c) ? new[] { ' ', c } : new[] { c }).ToArray());
+    }
+    private async Task ToggleEdit()
+    {
+        if (_table.IsEditMode)
+        {
+            try
+            {
+                _editMode = "Edit Rows";
+                List<ConsumerNumbers> consumersToUpdateConsumerNumbersList = new List<ConsumerNumbers>();
+
+                foreach (var consumerNumber in _consumerNumbers)
+                {
+                    var row = _data.FirstOrDefault(x => x.command_id == consumerNumber.CommandId);
+                    ConsumerNumbers consumer;
+                    if (row != null)
+                    {
+                        consumer = new ConsumerNumbers
+                        {
+                            CommandId = row.command_id,
+                        };
+
+                        if (row.new_number != consumerNumber.NewNumber)
+                        {
+                            consumer.NewNumber = row.new_number;
+                        }
+                        if (row.old_number != consumerNumber.OldNumber)
+                        {
+                            consumer.OldNumber = row.old_number;
+                        }
+                        if (consumer.OldNumber != null || consumer.NewNumber != null)
+                        {
+                            consumersToUpdateConsumerNumbersList.Add(consumer);
+                        }
+                    }
+                }
+                if (consumersToUpdateConsumerNumbersList.Any())
+                {
+                    await ReplacementService.UpdateDuplicatesAsync(consumersToUpdateConsumerNumbersList);
+                    await LoadDataAsync();
+                    consumersToUpdateConsumerNumbersList.Clear();
+                    _table.Refresh();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+        }
+        else
+        {
+            _editMode = "Save Changes";
+        }
+        _table.ToggleEditMode();
+
+    }
+}

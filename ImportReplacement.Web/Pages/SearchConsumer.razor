@@ -1,0 +1,169 @@
+﻿@page "/SearchConsumer"
+
+@using ImportReplacement.Models
+@using BlazorTable
+@using ImportReplacement.Web.Services.Interfaces
+@using Microsoft.Extensions.Configuration
+@using Newtonsoft.Json
+@inject ISiteService SiteService
+@inject IConsumerService ConsumerService
+@inject IToastService ToastService
+@inject IConfiguration Configuration
+
+@if (!string.IsNullOrEmpty(ExistingConsumers) && ExistingConsumers != "[]")
+{
+    <h3>Existing Consumers</h3>
+    var baseAddress = Configuration["SiteBaseAddress"];
+
+    @foreach (var consumer in JsonConvert.DeserializeObject<List<ExistingConsumer>>(ExistingConsumers))
+    {
+        string address = $"{consumer.FirstName} {consumer.LastName} {consumer.Address} ({consumer.SiteName})";
+        string link = baseAddress + $"ConsumerInfo.aspx?SiteID={consumer.SiteId}&ConsumerID={consumer.Id}";
+
+        <a href=@link  target="_blank">@address</a>
+        <br />
+    }
+    <hr/>
+}
+
+<h3>Search Consumer</h3>
+@if (SiteID == null)
+{
+    <SiteSelector @ref="_siteSelector" Sites="@Sites" />
+}
+
+Meter Number:
+<input type="number" @bind="@MeterNumber" @bind:event="oninput" />
+Billing ID:
+<input type="number" @bind="@BillingID" @bind:event="oninput" />
+Property ID:
+<input type="number" @bind="@PropertyID" @bind:event="oninput" />
+<Blazorise.Button Clicked="@FindConsumer" Color="Color.Primary" Loading="@IsLoading" Disabled="@(MeterNumber == null && BillingID == null && PropertyID == null)">Find Consumer</Blazorise.Button>
+@if (_displayData != null)
+{
+    <BlazorTable.Table TableItem="Consumer" Items="_displayData" PageSize="15" @ref="_table" RowClickAction="RowClick" SelectionType="SelectionType.Single" TableRowClass="@(x => GetRowClass(x))">
+        <BlazorTable.Column TableItem="Consumer" Title="Site" Field="@(x => x.ID)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.ID
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Channel" Field="@(x => x.Channel)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.Channel
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Biling Id" Field="@(x => x.BilingId)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.BilingId
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Meter Number" Field="@(x => x.MeterNumber)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.MeterNumber
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="First Name" Field="@(x => x.FirstName)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.FirstName
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Last Name" Field="@(x => x.LastName)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.LastName
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Address Line1" Field="@(x => x.AddressLine1)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.AddressLine1
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Address Line2" Field="@(x => x.AddressLine2)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.AddressLine2
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="Consumer" Title="Replacement Type" Field="@(x => x.replacement_type)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.replacement_type
+            </Template>
+        </BlazorTable.Column>
+        <EmptyDataTemplate>
+            <div class="text-center">
+                No rows found!
+            </div>
+        </EmptyDataTemplate>
+    </BlazorTable.Table>
+    <Blazorise.Button @ref="_moveButton" Clicked="@MoveToSelectedTypeAsync" Color="Color.Secondary" Disabled="@(!HasSelection)">Move To Selected Type</Blazorise.Button>
+}
+
+@code {
+    [Parameter]
+    public IEnumerable<Site> Sites { get; set; }
+    [Parameter]
+    public int? SiteID { get; set; }
+    [Parameter]
+    public EventCallback<long> OnConsumerSelected { get; set; }
+    [Parameter]
+    public long CommandId { get; set; }
+    [Parameter]
+    public string ExistingConsumers { get; set; }
+
+    private ITable<Consumer> _table;
+    private BaseComponent _moveButton;
+    private SiteSelector _siteSelector;
+    private bool HasSelection => _table?.SelectedItems?.Count == 1;
+    private Consumer[] _displayData;
+
+    public long? MeterNumber { get; set; }
+    public long? BillingID { get; set; }
+    public long? PropertyID { get; set; }
+    public bool IsLoading { get; set; }
+
+    private async Task FindConsumer()
+    {
+        IsLoading = true;
+        var site = SiteID ?? _siteSelector?.CurrentSite ?? 0;
+        if (site <= 0)
+        {
+            ToastService.ShowError("Please Select Site");
+            IsLoading = false;
+            return;
+        }
+        _table?.SelectedItems.Clear();
+        _displayData = await Task.Run(async () => (await ConsumerService.GetConsumersAsync(site, MeterNumber, BillingID, PropertyID)).ToArray());
+        IsLoading = false;
+        StateHasChanged();
+    }
+
+
+    public void RowClick(Consumer consumer)
+    {
+        StateHasChanged();
+    }
+
+    private string GetRowClass(Consumer consumer)
+    {
+        return _table.SelectedItems.Contains(consumer) ? "bg-primary" : "";
+    }
+    private async Task MoveToSelectedTypeAsync()
+    {
+        var selectedConsumer = _table.SelectedItems.FirstOrDefault();
+        if (selectedConsumer == null) return;
+        await ConsumerService.MoveConsumerToTypeAsync(CommandId, selectedConsumer.ID, selectedConsumer.replacement_type, selectedConsumer.SiteID);
+        await OnConsumerSelected.InvokeAsync(CommandId);
+    }
+
+
+    class ExistingConsumer
+    {
+        public int SiteId { get; set; }
+        public string SiteName { get; set; }
+        public long Id { get; set; }
+        public string Address { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+    }
+
+   
+
+}

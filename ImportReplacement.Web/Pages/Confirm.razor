@@ -1,0 +1,73 @@
+﻿<Modal @ref="_modalRef">
+    <ModalBackdrop/>
+    <ModalContent IsCentered="true">
+        <ModalHeader>
+            <ModalTitle>@ConfirmationTitle</ModalTitle>
+            <CloseButton Clicked="() => OnConfirmationChange(false)"/>
+        </ModalHeader>
+        <ModalBody>
+            @ConfirmationMessage
+        </ModalBody>
+        <ModalFooter>
+            @if (IsAuthentication)
+            {
+                <input type="password" @bind-value="@Password"/>
+                <Button Color="Color.Light" Clicked="OnPasswordChangeAsync">Restore</Button>
+            }
+            else
+            {
+                @if (!IsAlert)
+                {
+                    <Button Color="Color.Secondary" Clicked="() => OnConfirmationChange(false)">Cancel</Button>
+
+                }
+                <Button Color="Color.Primary" Clicked="() => OnConfirmationChange(true)">Approve</Button>
+            }
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+
+@code {
+    private Modal _modalRef;
+
+    [Parameter]
+    public string ConfirmationTitle { get; set; }
+    [Parameter]
+    public string ConfirmationMessage { get; set; }
+    [Parameter]
+    public EventCallback<bool> ConfirmationChanged { get; set; }
+    [Parameter]
+    public EventCallback<string> PasswordChanged { get; set; }
+    [Parameter]
+    public bool IsAlert { get; set; }
+    [Parameter]
+    public bool IsAuthentication { get; set; }
+
+    public string Password { get; set; }
+
+    public async void Enter(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+           await OnPasswordChangeAsync();
+        }
+    }
+
+    public void Show()
+    {
+        Password = string.Empty;
+
+        _modalRef.Show();
+    }
+
+    protected async Task OnConfirmationChange(bool value)
+    {
+        _modalRef.Hide();
+        await ConfirmationChanged.InvokeAsync(value);
+    }
+    protected async Task OnPasswordChangeAsync()
+    {
+        _modalRef.Hide();
+        await PasswordChanged.InvokeAsync(Password);
+    }
+}

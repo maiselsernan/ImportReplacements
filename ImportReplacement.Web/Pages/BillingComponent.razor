@@ -1,0 +1,72 @@
+﻿@inject IReasonService _reasonService
+@inject IElementService _elementService
+@using ImportReplacement.Models
+@using ImportReplacement.Web.Services.Interfaces
+<div class="d-inline-block align-top">
+    <h4>Billing</h4>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" @bind-value="@RowToApprove.DisplayBillable" checked="@RowToApprove.DisplayBillable" id="Billable">
+        <label class="form-check-label" for="Billable">Billable</label>
+    </div>
+
+    <div class="form-group">
+        <label for="Reason">Reason</label>
+        <select class="form-control" @bind="@RowToApprove.ReasonId" id="Reason">
+            <option value="0">---Select Reason---</option>
+            @if (Reasons != null)
+            {
+                @foreach (var reason in Reasons)
+                {
+                    <option value="@reason.Id">@reason.Name</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="comment">Comment</label>
+        <textarea class="form-control" @bind="@RowToApprove.ChargeDescription" id="comment"></textarea>
+    </div>
+    <div class="form-group">
+        @if (Elements != null)
+        {
+            @foreach (var element in Elements.Where(e => e.IsAssociated))
+            {
+                <span class='badge badge-primary'>
+                    @element.Name * @element.Quantity  
+                </span>
+            }
+        }
+    </div>
+    <div class="d-inline-block">
+        <Blazorise.Button Clicked="@ShowElements" Color="Color.Warning">Show Elements</Blazorise.Button>
+    </div>
+</div>
+
+<ElementsModal @ref="ElementsModal" CommandId="RowToApprove.CommandId" OnElementsChange="@(() => UpdateElementsList())"></ElementsModal>
+
+@code {
+    public IEnumerable<Reason> Reasons { get; set; }
+
+    [Parameter]
+    public IDetailsProvider RowToApprove { get; set; }
+    protected ElementsModal ElementsModal { get; set; }
+
+    public IList<ConsumerElement> Elements { get; set; }
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Elements = (await _elementService.GetConsumerElementsAsync(RowToApprove.CommandId)).ToList();
+        Reasons = (await _reasonService.GetReasonsAsync()).ToList();
+    }
+
+    private void ShowElements()
+    {
+        ElementsModal.Show(Elements);
+    }
+
+    private void UpdateElementsList()
+    {
+    }
+
+}

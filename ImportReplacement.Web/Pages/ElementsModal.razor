@@ -1,0 +1,48 @@
+﻿@using ImportReplacement.Models
+@using ImportReplacement.Web.Services.Interfaces
+@inject IElementService _elementService
+<Modal @ref="_modalRef">
+    <ModalBackdrop />
+    <ModalContent IsCentered="true">
+        <ModalHeader>
+            <ModalTitle>Elements</ModalTitle>
+        </ModalHeader>
+        <ModalBody>
+            @if (ElementsList != null)
+            {
+                @foreach (var element in ElementsList)
+                {
+                    <Element ConsumerElement="element"></Element>
+                }
+            }
+        </ModalBody>
+        <ModalFooter>
+            <Button Color="Color.Primary" Clicked="() => Approve(true)">Approve</Button>
+        </ModalFooter>
+    </ModalContent>
+</Modal>
+@code {
+    private Modal _modalRef;
+
+
+    public IEnumerable<ConsumerElement> ElementsList { get; set; }
+    [Parameter]
+    public long CommandId { get; set; }
+    [Parameter]
+    public EventCallback<string> OnElementsChange { get; set; }
+
+
+    public void Show(IEnumerable<ConsumerElement> elementsList)
+    {
+        ElementsList = elementsList;
+        _modalRef.Show();
+    }
+    protected async Task Approve(bool value)
+    {
+        await _elementService.UpdateConsumerElements(ElementsList.Where(x => x.IsAssociated), CommandId);
+        _modalRef.Hide();
+        await OnElementsChange.InvokeAsync();
+    }
+
+
+}

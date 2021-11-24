@@ -1,0 +1,220 @@
+﻿@using Microsoft.Extensions.Configuration
+@page "/Ignores"
+
+@using BlazorTable
+@using System.Threading
+@using ImportReplacement.Models
+@using Blazor.DownloadFileFast.Interfaces
+@using ImportReplacement.Web.Services.Interfaces
+@inject IConfiguration _configuration
+@inject IToastService _toastService
+@inject IReplacementService _replacementService
+@inject ITypesService _typesService
+@inject IAuthenticationService _authenticationService
+@inject NavigationManager _navigationManager
+@inject RoutingHelper _routingHelper
+@inject IReasonService _reasonService
+@inject IBlazorDownloadFileService _blazorDownloadFileService
+@implements IDisposable
+
+<h3>Ignores</h3>
+
+@if (_data == null)
+{
+    <div class="spinner"></div>
+}
+else
+{
+    <SiteSelector @ref="_siteSelector" Sites="@_sitesList" OnSiteSelection="@(FilterSite)" />
+    <BlazorTable.Table TableItem="RowToApprove" Items="@_data" PageSize="15" @ref="_table">
+        <BlazorTable.Column TableItem="RowToApprove" Title="Approved" Field="@(x => x.Approved)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                <input type="checkbox" class="form-control form-control-sm" @bind-value="@(context.Approved)" checked="@context.Approved" disabled=true />
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Old Number" Field="@(x => x.OldNumber)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                <input type="text" @bind-value="@context.OldNumber" class="form-control form-control-sm" disabled=true />
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="New Number" Field="@(x => x.NewNumber)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                <input type="text" @bind-value="@context.NewNumber" class="form-control form-control-sm" disabled=true />
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Address" Field="@(x => x.AddressLine1)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.AddressLine1 @context.AddressLine2
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Full Name" Field="@(x => x.FirstName)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.FirstName  @context.LastName
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Channel Id" Field="@(x => x.ChannelId)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.ChannelId
+                @if (context.NewNumber != context.ChannelMeterNumber)
+                {
+                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                }
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Code Description" Field="@(x => x.Code)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @string.Join(", ", Utils.GetDescriptions(context.Code))
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Comment" Field="@(x => x.Comment)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.Comment
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column @ref="_siteColumn" TableItem="RowToApprove" Title="Site" Field="@(x => x.SiteId)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.SiteId -  @context.SiteName
+            </Template>
+        </BlazorTable.Column>
+        <DetailTemplate TableItem="RowToApprove">
+            <div class="d-inline-block">
+                <Images OldImage="@context.OldImage" NewImage="@context.NewImage"></Images>
+                <Map Longitude="@context.longitude" Latitude="@context.latitude"></Map>
+            </div>
+            <hr/>
+
+            <div class="d-inline-block">
+                <Blazorise.Button Clicked="@(() => RestoreMeterAsync(context.CommandId))" Color="Color.Warning">Restore Meter</Blazorise.Button>
+               
+            </div>
+
+        </DetailTemplate>
+        <EmptyDataTemplate>
+            <div class="text-center">
+                No rows found!
+            </div>
+        </EmptyDataTemplate>
+        <Pager ShowPageNumber="true" ShowTotalCount="true" ShowPageSizes="true" />
+    </BlazorTable.Table>
+    <Confirm @ref="ConfirmRestore" PasswordChanged="ConfirmIgnore_Click" IsAuthentication="true" ConfirmationTitle="Restore Meter" ConfirmationMessage="Please enter password to restore meter"></Confirm>
+
+}
+
+
+
+@code {
+    public string Type = "5";
+
+    public string CurrentReason { get; set; }
+
+    private ITable<RowToApprove> _table;
+    private IColumn<RowToApprove> _siteColumn;
+    private List<RowToApprove> _data;
+    private Dictionary<long, string> _sites;
+    private List<Site> _sitesList;
+    private SiteSelector _siteSelector;
+    private RequestTypes _requestType;
+    private IEnumerable<Reason> Reasons { get; set; }
+    protected Confirm ConfirmRestore { get; set; }
+    private long _commandId;
+
+    protected override Task OnInitializedAsync()
+    {
+        _navigationManager.LocationChanged += LocationChanged;
+
+        return PopulateEnumsAsync();
+    }
+
+    void LocationChanged(object sender, LocationChangedEventArgs e)
+    {
+        _routingHelper.SourcePage = $"/Ignores";
+    }
+    void IDisposable.Dispose()
+    {
+        _navigationManager.LocationChanged -= LocationChanged;
+    }
+    private async Task LoadDataAsync()
+    {
+        if (string.IsNullOrEmpty(Type))
+        {
+            Type = RequestTypes.Maintain.ToString();
+        }
+        Enum.TryParse(Type, out _requestType);
+
+        var data = (await _replacementService.GetMetersToApproveAsync(_requestType)).ToArray();
+        _sites = new Dictionary<long, string>();
+        foreach (var item in data)
+        {
+            if (item.SiteId != null && !_sites.ContainsKey(item.SiteId.Value))
+            {
+                _sites.Add(item.SiteId.Value, item.SiteName);
+            }
+
+        }
+        _sitesList = _sites.Select(p => new Site { ID = (int)p.Key, SiteName = p.Value }).ToList();
+        if (data.Length == 0)
+        {
+            _toastService.ShowInfo("No data to display", "No Data");
+        }
+        CopyData(data.ToList());
+    }
+    private async Task PopulateEnumsAsync()
+    {
+        Reasons = (await _reasonService.GetReasonsAsync()).ToList();
+    }
+
+
+    private void CopyData(List<RowToApprove> data)
+    {
+        var oldData = Interlocked.Exchange(ref _data, data);
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        CopyData(null);
+        return LoadDataAsync();
+    }
+
+
+
+    private void FilterSite(int siteId)
+    {
+        if (siteId <= 0)
+        {
+            _siteColumn.Visible = true;
+            _siteColumn.Filter = null;
+        }
+        else
+        {
+            _siteColumn.Visible = false;
+            _siteColumn.Filter = x => x.SiteId == siteId;
+        }
+        _table.Refresh();
+
+    }
+
+    protected async Task ConfirmIgnore_Click(string password)
+    {
+        if (string.IsNullOrEmpty(password))
+        {
+            _toastService.ShowError("Please fill password");
+            return;
+        }
+        bool confirmed = await _authenticationService.Authenticate(password);
+        if (confirmed)
+        {
+            var index = _data.FindIndex(item => item.CommandId == _commandId);
+            await _replacementService.RestoreMeterAsync(_commandId);
+            if (index != -1) _data.RemoveAt(index);
+        }
+        else
+        {
+            _toastService.ShowError("Wrong Password");
+        }
+    }
+    private void RestoreMeterAsync(long commandId)
+    {
+        _commandId = commandId;
+        ConfirmRestore.Show();
+    }
+}

@@ -1,0 +1,158 @@
+﻿@page "/Actions"
+@using Tewr.Blazor.FileReader
+@using ImportReplacement.Models
+@using ImportReplacement.Web.Services.Interfaces
+@inject ISiteService SiteService
+@inject IFileReaderService FileReader
+@inject IFileService FileService
+@inject IElementService _elementService
+@inject IToastService ToastService
+
+<h3>Actions</h3>
+<hr />
+@if (IsLoading)
+{
+    <div class="spinner"></div>
+}
+<SiteSelector @ref="_siteSelector" Sites="@_sites" />
+<br />
+<div class="card-deck">
+
+    <div class="card m-3" style="min-width: 18rem; max-width: 30.5%;">
+        <div class="card-header">
+            <h3> Upload new consumers file</h3>
+           
+        </div>
+        <div class="card-body">
+            <input type="file" class="btn btn-block btn-success" value="@_fileValue" @ref="_inputReference" @onchange="async () => await OpenFileAsync()" />
+        </div>
+        <div class="card-footer">
+            <b> Required Fields:</b> BilingID, Diameter, AddressLine2, PayerID, FirstName, PropertyID
+        </div>
+    </div>
+    <div class="card m-3" style="min-width: 18rem; max-width: 30.5%;">
+        <div class="card-header">
+            <h3> Delete consumers by site</h3>
+        </div>
+        <div class="card-body">
+            <Blazorise.Button Clicked="@DeleteConsumersAsync" Color="Color.Info" Loading="@IsLoadingDel">Delete Consumers</Blazorise.Button>
+        </div>
+    </div>
+    <div class="card m-3" style="min-width: 18rem; max-width: 30.5%;">
+        <div class="card-header">
+            <h3>Add New Element</h3>
+        </div>
+        <div class="card-body">
+            <input type="text" @bind-value="@_newElement" class="form-control form-control-sm" />
+            <Blazorise.Button Clicked="@AddNewElement" Color="Color.Primary" Loading="@IsLoadingNewElement">Add</Blazorise.Button>
+        </div>
+    </div>
+</div>
+<Confirm @ref="Alert" ConfirmationTitle="Error" ConfirmationMessage="@Message" IsAlert="true"></Confirm>
+
+
+@code {
+        private SiteSelector _siteSelector;
+        private IEnumerable<Site> _sites = new List<Site>();
+        protected Confirm Alert { get; set; }
+        public string Message { get; set; }
+        private string _fileValue;
+        private string _newElement { get; set; }
+        ElementReference _inputReference;
+        public bool IsLoadingNewElement;
+        public bool IsLoading;
+        public bool IsLoadingDel;
+        protected override async Task OnInitializedAsync()
+        {
+            _sites = (await SiteService.GetSitesAsync()).ToList();
+        }
+
+        async Task OpenFileAsync()
+        {
+            try
+            {
+                IsLoading = true;
+                IFileReference file = (await FileReader.CreateReference(_inputReference).EnumerateFilesAsync()).FirstOrDefault();
+                _fileValue = _fileValue == null ? "" : null;
+
+                if (file == null)
+                {
+                    IsLoading = false;
+                    return;
+                }
+                int? siteId = _siteSelector.CurrentSite == 0 ? null : _siteSelector.CurrentSite;
+
+                if (siteId is null or <= 0)
+                {
+                    ToastService.ShowError("Please select site", "Site needed");
+                    IsLoading = false;
+                    return;
+                }
+                var response = await FileService.FileUploadAsync(file, siteId.Value);
+                if (response.IsSuccess)
+                {
+                    ToastService.ShowSuccess("File has been uploaded successfully!", "Great Job!");
+                }
+                else
+                {
+                    Message = response.Message;
+                    Alert.Show();
+                }
+            }
+            catch (Exception)
+            {
+                ToastService.ShowError("An error has occurred.", "Try another file!");
+            }
+            IsLoading = false;
+        }
+
+        private async Task AddNewElement()
+        {
+            try
+            {
+                IsLoadingNewElement = true;
+                if (string.IsNullOrEmpty(_newElement))
+                {
+                    ToastService.ShowWarning("Please insert new element name");
+                    IsLoadingNewElement = false;
+                    return;
+                }
+                await _elementService.AddNewElementAsync(_newElement);
+                IsLoadingNewElement = false;
+                ToastService.ShowSuccess($"{_newElement} added to elements list!", "New Element");
+                _newElement = string.Empty;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
+        }
+
+        private async Task DeleteConsumersAsync()
+        {
+            try
+            {
+                IsLoadingDel = true;
+                int? siteId = _siteSelector.CurrentSite == 0 ? null : _siteSelector.CurrentSite;
+
+                if (siteId == null || siteId <= 0)
+                {
+                    ToastService.ShowError("Please select site", "Site needed");
+                    IsLoadingDel = false;
+                    return;
+                }
+                await FileService.DeleteNonAmrConsumersBySiteId(siteId.Value);
+                IsLoadingDel = false;
+                ToastService.ShowSuccess($@"Consumers from site {_sites.Single(x => x.ID == siteId).SiteName} were deleted.");
+            }
+            catch (Exception)
+            {
+                ToastService.ShowError("Something went wrong. please try again.");
+            }
+
+
+        }
+
+
+}

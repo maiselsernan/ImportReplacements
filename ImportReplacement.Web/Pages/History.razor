@@ -1,0 +1,216 @@
+﻿@page "/History"
+@using BlazorTable
+@using System.Threading
+@using ImportReplacement.Models
+@using System.ComponentModel
+@using Blazor.DownloadFileFast.Interfaces
+@using ImportReplacement.Web.Services.Interfaces
+@using Microsoft.Extensions.Configuration
+@inject IToastService _toastService
+@inject IReplacementService _replacementService
+@inject ITypesService _typesService
+@inject NavigationManager _navigationManager
+@inject RoutingHelper _routingHelper
+@inject IReasonService _reasonService
+@inject IBlazorDownloadFileService _blazorDownloadFileService
+@inject IConfiguration _configuration
+@inject IElementService _elementService
+@implements IDisposable
+
+<h3>History</h3>
+
+@if (_data == null)
+{
+    <div class="spinner"></div>
+}
+else
+{
+    <SiteSelector @ref="_siteSelector" Sites="@_sitesList" OnSiteSelection="@(siteId => FilterSite(siteId))" />
+    <h5>From Date:</h5>
+    <input type="date" @bind="@_fromDate" />
+    <h5>To Date:</h5>
+    <input type="date" @bind="@_toDate" />
+    <Blazorise.Button Clicked="@GetHistoryAsync" Color="Color.Primary" Loading="@IsLoading">Get History</Blazorise.Button>
+    <BlazorTable.Table TableItem="RowToApprove" Items="@_data" PageSize="15" @ref="_table">
+        <BlazorTable.Column TableItem="RowToApprove" Title="Old Number" Field="@(x => x.OldNumber)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.OldNumber
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="New Number" Field="@(x => x.NewNumber)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.NewNumber
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Address" Field="@(x => x.AddressLine1)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.AddressLine1 @context.AddressLine2
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Full Name" Field="@(x => x.FirstName)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.FirstName  @context.LastName
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Channel Id" Field="@(x => x.ChannelId)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.ChannelId
+                @if (context.NewNumber != context.ChannelMeterNumber)
+                {
+                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                }
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Date" Field="@(x=> x.ReplaceDate)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.ReplaceDate
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Code Description" Field="@(x => x.Code)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @string.Join(", ", Utils.GetDescriptions(context.Code))
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column TableItem="RowToApprove" Title="Comment" Field="@(x => x.Comment)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.Comment
+            </Template>
+        </BlazorTable.Column>
+        <BlazorTable.Column @ref="_siteColumn" TableItem="RowToApprove" Title="Site" Field="@(x => x.SiteId)" Sortable="true" Filterable="true" Width="10%">
+            <Template>
+                @context.SiteId -  @context.SiteName
+            </Template>
+        </BlazorTable.Column>
+        <DetailTemplate TableItem="RowToApprove">
+            <DetailsComponent  Context="@context" IsBillable="true"></DetailsComponent>
+        </DetailTemplate>
+        <EmptyDataTemplate>
+            <div class="text-center">
+                No rows found!
+            </div>
+        </EmptyDataTemplate>
+        <Pager ShowPageNumber="true" ShowTotalCount="true" ShowPageSizes="true" />
+    </BlazorTable.Table>
+
+}
+
+
+
+@code {
+    [Parameter]
+    public string CurrentReason { get; set; }
+
+    ITable<RowToApprove> _table;
+    IColumn<RowToApprove> _siteColumn;
+    List<RowToApprove> _data;
+    Dictionary<long, string> _sites;
+    List<Site> _sitesList;
+    SiteSelector _siteSelector;
+    DateTime _toDate;
+    DateTime _fromDate;
+    public bool IsLoading;
+
+    protected override Task OnInitializedAsync()
+    {
+        _navigationManager.LocationChanged += LocationChanged;
+        return Task.CompletedTask;
+    }
+
+    void LocationChanged(object sender, LocationChangedEventArgs e)
+    {
+        _routingHelper.SourcePage = "/History";
+    }
+    void IDisposable.Dispose()
+    {
+        _navigationManager.LocationChanged -= LocationChanged;
+    }
+    private async Task LoadDataAsync()
+    {
+        _toDate = DateTime.Now.Date;
+        _fromDate = DateTime.Now.AddMonths(-1).Date;
+        var data = (await _replacementService.GetHandledRowsAsync(_fromDate, _toDate)).ToArray();
+        _sites = new Dictionary<long, string>();
+        foreach (var item in data)
+        {
+            item.PropertyChanged += ItemOnPropertyChanged;
+            if (!_sites.ContainsKey(item.SiteId.Value))
+            {
+                _sites.Add(item.SiteId.Value, item.SiteName);
+            }
+
+        }
+        _sitesList = _sites.Select(p => new Site { ID = (int)p.Key, SiteName = p.Value }).ToList();
+        if (data.Length == 0)
+        {
+            _toastService.ShowInfo("No data to display", "No Data");
+        }
+        CopyData(data.ToList());
+    }
+   
+    private async Task GetHistoryAsync()
+    {
+        IsLoading = true;
+        _data = (await _replacementService.GetHandledRowsAsync(_fromDate, _toDate)).ToList();
+
+
+        foreach (var item in _data)
+        {
+            item.PropertyChanged += ItemOnPropertyChanged;
+        }
+        IsLoading = false;
+        _table.Refresh();
+
+    }
+
+    private void ItemOnPropertyChanged(object sender, PropertyChangedEventArgs e)
+    {
+
+        switch (e.PropertyName)
+        {
+            case nameof(RowToApprove.Billable):
+            case nameof(RowToApprove.ReasonId):
+            case nameof(RowToApprove.ChargeDescription):
+                break;
+            default:
+                return;
+        }
+        _replacementService.ChangeRowAsync(sender as RowToApprove);
+    }
+
+    private void CopyData(List<RowToApprove> data)
+    {
+        var oldData = Interlocked.Exchange(ref _data, data);
+        if (oldData != null)
+        {
+            foreach (var item in oldData)
+            {
+                item.PropertyChanged -= ItemOnPropertyChanged;
+            }
+        }
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        CopyData(null);
+        return LoadDataAsync();
+    }
+
+
+    private void FilterSite(int siteId)
+    {
+        if (siteId <= 0)
+        {
+            _siteColumn.Visible = true;
+            _siteColumn.Filter = null;
+        }
+        else
+        {
+            _siteColumn.Visible = false;
+            _siteColumn.Filter = x => x.SiteId.Value == siteId;
+        }
+        _table.Refresh();
+
+    }
+
+
+}

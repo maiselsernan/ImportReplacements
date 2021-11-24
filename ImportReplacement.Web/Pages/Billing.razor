@@ -1,0 +1,312 @@
+﻿@page "/Billing"
+
+@using BlazorTable
+@using ImportReplacement.Models
+@using ImportReplacement.Web.Services.Interfaces
+@using Blazor.DownloadFileFast.Interfaces
+@using System.IO
+@using System.Text
+@using System.Globalization
+@using CsvHelper;
+@using System.ComponentModel
+@using System.Text.Json
+@using Microsoft.Extensions.Configuration
+@inject IConfiguration _configuration
+@inject IReplacementService _replacementService
+@inject IReasonService _reasonService
+@inject ISiteService _siteService
+@inject IBlazorDownloadFileService _blazorDownloadFileService
+@inject IElementService _elementService
+
+<SiteSelector @ref="_siteSelector" Sites="@_sites" />
+<h5>From Date:</h5>
+<input type="date" @bind="@_fromDate" />
+<h5>To Date:</h5>
+<input type="date" @bind="@_toDate" />
+<Blazorise.Button Clicked="@GetBillingsAsync" Color="Color.Primary" Loading="@IsLoading">Get Billings</Blazorise.Button>
+<BlazorTable.Table TableItem="RowToCharge" PageSize="15" Items="@_data" @ref="Table">
+    <BlazorTable.Column TableItem="RowToCharge" Title="Site" Field="@(x=> x.SiteName)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.SiteName
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Consumer Id" Field="@(x=> x.ConsumerId)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.ConsumerId
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Billing Id" Field="@(x=> x.BilingID)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.BilingID
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Address" Field="@(x => x.Address)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.Address
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Date" Field="@(x=> x.DateTime)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.DateTime.ToString("dd/MM/yyyy HH:mm")
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Old Number" Field="@(x=> x.OldNumber)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.OldNumber
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Old Reading" Field="@(x=> x.OldReading)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.OldReading
+        </Template>
+    </BlazorTable.Column>
+
+    <BlazorTable.Column TableItem="RowToCharge" Title="New Number" Field="@(x=> x.NewNumber)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.NewNumber
+        </Template>
+    </BlazorTable.Column>
+
+    <BlazorTable.Column TableItem="RowToCharge" Title="Reading" Field="@(x=> x.Reading)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.Reading
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Comment" Field="@(x=> x.Comment)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.Comment
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Charge Description" Field="@(x=> x.ChargeDescription)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.ChargeDescription
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Reading" Field="@(x=> x.CodeDescription)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.CodeDescription
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Replacement Reason" Field="@(x=> x.ReplacementReason)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.ReplacementReason
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="RowToCharge" Title="Charged" Field="@(x=> x.Charged)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            <input type="checkbox" class="form-control form-control-sm" @bind-value="@(context.Charged)" checked="@context.Charged" />
+        </Template>
+    </BlazorTable.Column>
+    <DetailTemplate TableItem="RowToCharge">
+
+        <div class="d-inline-block">
+            <DetailsComponent IsBillable="true" Context="@context"></DetailsComponent>
+        </div>
+    </DetailTemplate>
+    <EmptyDataTemplate>
+        <div class="text-center">
+            No rows found!
+        </div>
+    </EmptyDataTemplate>
+    <Pager ShowPageNumber="true" ShowTotalCount="true" ShowPageSizes="true" />
+</BlazorTable.Table>
+<Blazorise.Button Clicked="@DownloadBillingAsync" Color="Color.Success" Loading="@IsLoadingDownload">Download File</Blazorise.Button>
+<Confirm @ref="ConfirmRemove" ConfirmationChanged="ConfirmRemove_Click" ConfirmationTitle="Remove Row" ConfirmationMessage="Remove Current Row?"></Confirm>
+
+@code {
+
+    private SiteSelector _siteSelector;
+    private IEnumerable<Site> _sites = new List<Site>();
+    private List<RowToCharge> _data;
+    public bool IsLoading;
+    public bool IsLoadingDownload;
+    protected Confirm ConfirmRemove { get; set; }
+    DateTime _toDate;
+    DateTime _fromDate;
+    public ITable<RowToCharge> Table;
+    private long _commandId;
+    private IEnumerable<Reason> Reasons { get; set; }
+
+    protected async Task ConfirmRemove_Click(bool manuallyConfirmed)
+    {
+        if (manuallyConfirmed)
+        {
+            var index = _data.FindIndex(item => item.CommandId == _commandId);
+            await _replacementService.RemoveFromBillingAsync(_commandId);
+            if (index != -1) _data.RemoveAt(index);
+
+        }
+    }
+    private void RemoveRowAsync(long commandId)
+    {
+        _commandId = commandId;
+        ConfirmRemove.Show();
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = (await _siteService.GetSitesAsync()).ToList();
+        _toDate = DateTime.Now.Date;
+        _fromDate = DateTime.Now.AddMonths(-1).Date;
+        _data = (await _replacementService.GetRowsToChargeAsync(_siteSelector.CurrentSite, _fromDate, _toDate)).ToList();
+        foreach (var item in _data)
+        {
+            item.PropertyChanged += ItemOnPropertyChanged;
+        }
+        Reasons = (await _reasonService.GetReasonsAsync()).ToList();
+
+    }
+
+    private async Task GetBillingsAsync()
+    {
+        IsLoading = true;
+        _data = (await _replacementService.GetRowsToChargeAsync(_siteSelector.CurrentSite, _fromDate, _toDate)).ToList();
+
+        foreach (var item in _data)
+        {
+            item.PropertyChanged += ItemOnPropertyChanged;
+        }
+        IsLoading = false;
+        Table.Refresh();
+
+    }
+
+    private async Task<(string[] Titles, IList<object[]> Data)> GetRowsToPrint(IList<RowToCharge> data)
+    {
+        var commandIds = data.Select(x => x.CommandId).ToList();
+        var elements = await _elementService.GetElementsToCharge(commandIds);
+
+        var titles = new string[25 + elements.Length];
+        {
+            var i = 0;
+            titles[i++] = "Address";
+            titles[i++] = "BilingID";
+            titles[i++] = "ChargeDescription";
+            titles[i++] = "Charged";
+            titles[i++] = "Code";
+            titles[i++] = "CodeDescription";
+            titles[i++] = "CommandId";
+            titles[i++] = "Comment";
+            titles[i++] = "ConsumerId";
+            titles[i++] = "DateTime";
+            titles[i++] = "Diameter";
+            titles[i++] = "Expired";
+            titles[i++] = "latitude";
+            titles[i++] = "longitude";
+            titles[i++] = "NewImage";
+            titles[i++] = "NewNumber";
+            titles[i++] = "OldImage";
+            titles[i++] = "OldNumber";
+            titles[i++] = "OldReading";
+            titles[i++] = "OldReading";
+            titles[i++] = "ReasonId";
+            titles[i++] = "ReplaceDate";
+            titles[i++] = "ReplacementReason";
+            titles[i++] = "SiteID";
+            titles[i++] = "SiteName";
+        }
+
+        var rows = data.Select(rowToCharge =>
+        {
+            var result = new object[titles.Length];
+            var i = 0;
+            result[i++] = rowToCharge.Address;
+            result[i++] = rowToCharge.BilingID;
+            result[i++] = rowToCharge.ChargeDescription;
+            result[i++] = rowToCharge.Charged;
+            result[i++] = rowToCharge.Code;
+            result[i++] = rowToCharge.CodeDescription;
+            result[i++] = rowToCharge.CommandId;
+            result[i++] = rowToCharge.Comment;
+            result[i++] = rowToCharge.ConsumerId;
+            result[i++] = rowToCharge.DateTime;
+            result[i++] = rowToCharge.Diameter;
+            result[i++] = rowToCharge.Expired;
+            result[i++] = rowToCharge.latitude;
+            result[i++] = rowToCharge.longitude;
+            result[i++] = _configuration["BaseImageUrl"] + rowToCharge.NewImage;
+            result[i++] = rowToCharge.NewNumber;
+            result[i++] = _configuration["BaseImageUrl"] + rowToCharge.OldImage;
+            result[i++] = rowToCharge.OldNumber;
+            result[i++] = rowToCharge.OldReading;
+            result[i++] = rowToCharge.OldReading;
+            result[i++] = rowToCharge.ReasonId;
+            result[i++] = rowToCharge.ReplaceDate;
+            result[i++] = rowToCharge.ReplacementReason;
+            result[i++] = rowToCharge.SiteId;
+            result[i++] = rowToCharge.SiteName;
+            return result;
+        }).ToArray();
+        for (var iElement = 0; iElement < elements.Length; iElement++)
+        {
+            var element = elements[iElement];
+            titles[25 + iElement] = element.GetProperty("Name").GetString();
+            for (int iPayer = 0; iPayer < _data.Count; iPayer++)
+            {
+                var id = commandIds[iPayer];
+                var value = element.GetProperty(id.ToString());
+                rows[iPayer][25 + iElement] = value.ValueKind == JsonValueKind.Null ? 0 : value.GetInt32();
+            }
+        }
+        return (titles, rows);
+
+
+    }
+
+
+
+    private async Task DownloadBillingAsync()
+    {
+        IsLoadingDownload = true;
+        if (_data.Count != 0)
+        {
+            var fileName = $"{_fromDate:ddMMyyyy}-{_toDate:ddMMyyyy}";
+            fileName += _siteSelector.CurrentSite > 0 ? "_" + _siteSelector.CurrentSite : "";
+            fileName += ".csv";
+            var stream = new MemoryStream();
+            await stream.WriteAsync(Encoding.UTF8.GetPreamble());
+            await using (var writeFile = new StreamWriter(stream, leaveOpen: true))
+            {
+                var csv = new CsvWriter(writeFile, CultureInfo.InvariantCulture, true);
+
+                var (titles, rows) = await GetRowsToPrint(_data);
+                foreach (var title in titles)
+                {
+                    csv.WriteField(title);
+                }
+                await csv.NextRecordAsync();
+                foreach (var row in rows)
+                {
+                    foreach (var value in row)
+                    {
+                        csv.WriteField(value);
+                    }
+                    await csv.NextRecordAsync();
+                }
+                stream.Position = 0;
+
+                await _blazorDownloadFileService.DownloadFileAsync(fileName, stream.ToArray(), "text/csv");
+            }
+        }
+
+        IsLoadingDownload = false;
+    }
+    private void ItemOnPropertyChanged(object sender, PropertyChangedEventArgs e)
+    {
+        var row = sender as RowToCharge;
+        switch (e.PropertyName)
+        {
+            case nameof(RowToApprove.Billable):
+                if (!row.Billable.Value)
+                {
+                    RemoveRowAsync(row.CommandId);
+                }
+                break;
+            case nameof(RowToCharge.Charged):
+                break;
+            default:
+                return;
+        }
+        _replacementService.ChangeRowChargedAsync(row);
+    }
+
+}

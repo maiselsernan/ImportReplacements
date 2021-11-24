@@ -1,0 +1,104 @@
+﻿@page "/Channels/{MeterNumber}"
+@using BlazorTable
+@using ImportReplacement.Models
+@using ImportReplacement.Web.Services.Interfaces
+@inject IChannelService ChannelService
+
+
+<Blazorise.Button Clicked="@ReloadChannels" Color="Color.Info" Loading="@IsLoading">Reload Channels</Blazorise.Button>
+
+<BlazorTable.Table TableItem="Channel" Items="_channels" PageSize="15" @ref="_table" RowClickAction="RowClick" SelectionType="SelectionType.Single" SelectedItems="_selectedItems" TableRowClass="@(x => GetRowClass(x))">
+    <BlazorTable.Column TableItem="Channel" Title="Channel ID" Field="@(x => x.ChannelID)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.ChannelID
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="Channel" Title="End Unit" Field="@(x => x.EndUnit)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.EndUnit
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="Channel" Title="Channel Index" Field="@(x => x.ChannelIndex)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.ChannelIndex
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="Channel" Title="Last Received" Field="@(x => x.LastReceived)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.LastReceived
+        </Template>
+    </BlazorTable.Column>
+    <BlazorTable.Column TableItem="Channel" Title="Site" Field="@(x => x.Site)" Sortable="true" Filterable="true" Width="10%">
+        <Template>
+            @context.Site
+        </Template>
+    </BlazorTable.Column>
+    <EmptyDataTemplate>
+        <div class="text-center">
+            No rows found!
+        </div>
+        @if (CouldSaveWithoutChannel)
+        {
+            <Blazorise.Button Color="Color.Warning" Clicked="SaveWithoutChannelClicked">Save Without Channel</Blazorise.Button>
+        }
+    </EmptyDataTemplate>
+</BlazorTable.Table>
+
+
+@code {
+    private ITable<Channel> _table;
+    private Channel[] _channels;
+    private Channel _selected;
+    private List<Channel> _selectedItems = new List<Channel>();
+    public bool IsLoading;
+
+    [Parameter]
+    public long MeterNumber { get; set; }
+    [Parameter]
+    public long? ChannelId { get; set; }
+
+    [Parameter]
+    public EventCallback<long> OnChannelSelection { get; set; }
+    [Parameter]
+    public EventCallback SaveWithoutChannel { get; set; }
+    [Parameter]
+    public bool CouldSaveWithoutChannel { get; set; }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.Yield();
+
+        _channels = (await ChannelService.GetChannelsAsync(MeterNumber)).ToArray();
+
+    }
+    public void RowClick(Channel channel)
+    {
+        _selected = channel;
+        StateHasChanged();
+        OnChannelSelection.InvokeAsync(_selected.ChannelID);
+    }
+
+    public void SaveWithoutChannelClicked()
+    {
+        SaveWithoutChannel.InvokeAsync();
+    }
+    private async Task ReloadChannels()
+    {
+        IsLoading = true;
+        _channels = await Task.Run(async () => (await ChannelService.GetChannelsAsync(MeterNumber)).ToArray());
+        IsLoading = false;
+        _table.Refresh();
+
+    }
+
+
+    private string GetRowClass(Channel channel)
+    {
+        if ((_selected == null && channel.ChannelID == ChannelId) || _selected == channel)
+            return channel.HasConsumer ? "table-danger bg-danger" : "bg-primary";
+
+        return channel.HasConsumer ? "table-danger" : "";
+    }
+
+}

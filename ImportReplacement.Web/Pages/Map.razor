@@ -1,0 +1,19 @@
+﻿@using Microsoft.Extensions.Configuration
+@inject IConfiguration Configuration
+
+<div class="d-inline-block align-top">
+
+    <h4>Location</h4>
+    <iframe width="350"
+            height="400"
+            style="border: 0"
+            src="https://www.google.com/maps/embed/v1/place?key=@Configuration["mapKey"]&q=@Latitude,@Longitude">
+    </iframe>
+
+</div>
+@code {
+    [Parameter]
+    public float? Longitude { get; set; }
+    [Parameter]
+    public float? Latitude { get; set; }
+}

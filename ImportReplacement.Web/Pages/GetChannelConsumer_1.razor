@@ -1,0 +1,22 @@
+﻿@page "/GetChannelConsumer_1"
+@using ImportReplacement.Web.Services
+@inject IChannelConsumerService ChannelConsumerService
+@inject NavigationManager NavigationManager
+
+<h1>Get Channel Consumer</h1>
+<table>
+    <tr>
+        <td>
+            <input type="button" value="Test" @onclick="@TestButton"/>
+        </td>
+    </tr>
+</table>
+@code {
+
+    private void TestButton()
+    {
+        ChannelConsumerService.GetChannelConsumersAsync();
+
+    }
+
+}

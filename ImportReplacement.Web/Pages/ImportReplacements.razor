@@ -1,0 +1,45 @@
+﻿@page "/ImportReplacements"
+
+@using ImportReplacement.Web.Services.Interfaces
+@inject IReplacementService ReplacementService
+@inject IToastService ToastService
+@inject RoutingHelper RoutingHelper
+@inject NavigationManager NavigationManager
+
+@if (IsLoading)
+{
+    <div class="spinner"></div>
+}
+
+
+@code {
+
+    [Parameter]
+    public string RootPage { get; set; }
+
+    public bool IsLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await StartImportsAsync();
+        NavigationManager.NavigateTo(!string.IsNullOrEmpty(RoutingHelper.SourcePage) ? RoutingHelper.SourcePage : "/");
+    }
+
+    async Task StartImportsAsync()
+    {
+        try
+        {
+            IsLoading = true;
+            var rows = 0;
+            rows = await ReplacementService.ImportReplacements();
+
+            IsLoading = false;
+
+            ToastService.ShowSuccess($"{rows} replacements were migrated.");
+        }
+        catch (Exception e)
+        {
+            ToastService.ShowError("Remove replacements from PostgreSql to MSsql has failed ! !");
+        }
+    }
+}

@@ -1,0 +1,16 @@
+﻿@using ImportReplacement.Models
+<div class="d-inline-block">
+    <Images OldImage="@Context.OldImage" NewImage="@Context.NewImage"></Images>
+    <Map Longitude="@Context.longitude" Latitude="@Context.latitude"></Map>
+ @if (IsBillable)
+ {
+     <BillingComponent RowToApprove="@Context"></BillingComponent>
+ }
+</div>
+
+@code {
+    [Parameter]
+    public IDetailsProvider Context { get; set; }
+    [Parameter]
+    public bool IsBillable { get; set; }
+}

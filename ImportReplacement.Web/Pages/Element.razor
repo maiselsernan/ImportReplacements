@@ -1,0 +1,41 @@
+﻿@using Microsoft.AspNetCore.Components
+@using ImportReplacement.Models
+
+
+<div class="form-inline row">
+    <div class="custom-control custom-checkbox col-md-4" style="padding-left:2rem">
+        <input type="checkbox" class="custom-control-input" id="element@(ConsumerElement.ID)" checked="@HasQuantity" @bind-value="@HasQuantity">
+        <label class="custom-control-label justify-content-start" style="direction: rtl" for="element@(ConsumerElement.ID)">
+            @ConsumerElement.Name
+        </label>
+        </div>
+    <input type="number" class="form-control col-md-2" min="0" @bind-value="@Quantity"></div>
+
+@code {
+    [Parameter]
+    public ConsumerElement ConsumerElement { get; set; }
+    public int Quantity
+    {
+        get => ConsumerElement.Quantity;
+        set
+        {
+            if (value < 0) throw new ArgumentOutOfRangeException();
+            if ((ConsumerElement.Quantity == 0) != (value == 0))
+            {
+                ConsumerElement.IsAssociated = value > 0;
+            }
+            ConsumerElement.Quantity = value;
+        }
+    }
+
+    public bool HasQuantity
+    {
+        get => ConsumerElement.Quantity > 0;
+        set
+        {
+            if (!value) Quantity = 0;
+            else if (ConsumerElement.Quantity == 0) Quantity = 1;
+        }
+    }
+
+}

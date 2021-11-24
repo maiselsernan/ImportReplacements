@@ -1,0 +1,81 @@
+﻿@using ImportReplacement.Web.Pages
+@using ImportReplacement.Models
+@inject NavigationManager NavigationManager
+
+<div class="top-row pl-4 navbar navbar-dark">
+    <button class="navbar-toggler" @onclick="ToggleNavMenu">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+</div>
+
+<div class="@NavMenuCssClass">
+    <ul class="nav flex-column">
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="ImportReplacements" Match="NavLinkMatch.All">
+                <span class="oi oi-plus" aria-hidden="true"></span> Import Replacements
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("GenericTable/" + RequestTypes.Maintain)" Match="NavLinkMatch.All">
+                <span class="oi oi-pulse" aria-hidden="true"></span> Maintain
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("GenericTable/" + RequestTypes.Replace)" Match="NavLinkMatch.All">
+                <span class="oi oi-loop" aria-hidden="true"></span> Replace
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("GenericTable/" + RequestTypes.Installation)" Match="NavLinkMatch.All">
+                <span class="oi oi-home" aria-hidden="true"></span> Installation
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("UndefinedRows/" + RequestTypes.Undefined)" Match="NavLinkMatch.All">
+                <span class="oi oi-question-mark" aria-hidden="true"></span> Undefined Rows
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("UndefinedRows/" + RequestTypes.DuplicateMeter)" Match="NavLinkMatch.All">
+                <span class="oi oi-fullscreen-exit" aria-hidden="true"></span> Duplicate Meter
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="Billing" Match="NavLinkMatch.All">
+                <span class="oi oi-graph" aria-hidden="true"></span> Billing
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("Ignores")" Match="NavLinkMatch.All">
+                <span class="oi oi-delete" aria-hidden="true"></span> Ignored
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="Actions/" Match="NavLinkMatch.All">
+                <span class="oi oi-wrench" aria-hidden="true"></span> Actions
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("History")" Match="NavLinkMatch.All">
+                <span class="oi oi-clock" aria-hidden="true"></span> History
+            </NavLink>
+        </li>
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="@("GenericTable/" + RequestTypes.MaintainRequiredChannel)" Match="NavLinkMatch.All">
+                <span class="oi oi-account-login" aria-hidden="true"></span> Add Missing Channel
+            </NavLink>
+        </li>
+    </ul>
+</div>
+
+@code {
+    private bool collapseNavMenu = false;
+
+    private string NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+}

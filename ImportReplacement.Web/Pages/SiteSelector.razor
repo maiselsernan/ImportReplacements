@@ -1,0 +1,39 @@
+﻿@using ImportReplacement.Models
+<h5>Site</h5>
+<select class="form-control" @bind="@CurrentSiteString" style="width: 30%">
+    <option value="0">ALL</option>
+    @foreach (var site in Sites.OrderBy(x => x.ID))
+    {
+        <option value="@site.ID">@site.SiteName - @site.ID</option>
+    }
+</select>
+
+@code
+{
+    private int _currentSite;
+
+    [Parameter]
+    public IEnumerable<Site> Sites { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnSiteSelection { get; set; }
+
+    public int CurrentSite
+    {
+        get => _currentSite;
+        set => _currentSite = value;
+    }
+
+    private string CurrentSiteString
+    {
+        get => _currentSite.ToString();
+        set
+        {
+            int.TryParse(value, out var site);
+            _currentSite = site;
+            OnSiteSelection.InvokeAsync(site);
+
+        }
+    }
+}
+
